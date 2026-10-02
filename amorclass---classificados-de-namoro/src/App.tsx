@@ -27,24 +27,24 @@ import { MyAccountView } from './components/MyAccountView';
 import { InteractiveChatView } from './components/InteractiveChatView';
 import { RealtimeNotificationToast, AppNotification } from './components/RealtimeNotificationToast';
 import { getProfileAvatar } from './data/profileImages';
+import { STORAGE_LISTINGS_KEY, STORAGE_FAVORITES_KEY, STORAGE_USER_KEY } from './constants/storage';
 import {
   getListingsFromFirestore,
   subscribeToListings,
   saveListingToFirestore,
+  addCommentToFirestoreListing
+} from './features/listings/services/listingsService';
+import {
   saveUserProfileToFirestore,
-  getUserProfileFromFirestore,
-  addCommentToFirestoreListing,
-  saveFavoriteToFirestore,
+  getUserProfileFromFirestore
+} from './features/auth/services/authService';
+import { saveFavoriteToFirestore } from './features/favorites/services/favoritesService';
+import {
   subscribeToUserReceivedMessages,
   subscribeToWhoFavoritedMyListings
 } from './services/firebaseService';
 
-const STORAGE_LISTINGS_KEY = 'amorclass_listings_v1';
-const STORAGE_FAVORITES_KEY = 'amorclass_favorites_v1';
-const STORAGE_USER_KEY = 'amorclass_user_v1';
-
 export default function App() {
-  // Listings state with initial seed fallback
   const [listings, setListings] = useState<DatingListing[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_LISTINGS_KEY);
@@ -60,7 +60,6 @@ export default function App() {
     return INITIAL_LISTINGS;
   });
 
-  // User session state
   const [user, setUser] = useState<UserSession>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_USER_KEY);
@@ -80,7 +79,6 @@ export default function App() {
     };
   });
 
-  // Favorites state
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_FAVORITES_KEY);
@@ -93,7 +91,6 @@ export default function App() {
     return ['ad-101'];
   });
 
-  // Initialize current view from window location (pathname + search) for direct deep-linking
   const [currentView, setCurrentView] = useState<PageView>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -110,10 +107,7 @@ export default function App() {
     return { type: 'home' };
   });
 
-  // Contact modal state
   const [contactingListing, setContactingListing] = useState<DatingListing | null>(null);
-
-  // Real-time live notifications state
   const [liveNotifications, setLiveNotifications] = useState<AppNotification[]>([]);
   const [unreadActivityCount, setUnreadActivityCount] = useState(0);
   const [receivedMessagesCount, setReceivedMessagesCount] = useState(0);
@@ -124,7 +118,6 @@ export default function App() {
   const isInitialMsgLoad = useRef(true);
   const isInitialFavLoad = useRef(true);
 
-  // Real-time listener for incoming messages and new favorites with audio chime & toast
   useEffect(() => {
     if (!user.isLoggedIn) {
       setLiveNotifications([]);
@@ -142,11 +135,9 @@ export default function App() {
     const targetListingIds = myProfile ? [myProfile.id] : user.myListingIds;
     if (!targetListingIds || targetListingIds.length === 0) return;
 
-    // Reset initial load state when target changes
     isInitialMsgLoad.current = true;
     isInitialFavLoad.current = true;
 
-    // 1. Subscribe to received messages in real time (only unread messages count towards the badge)
     const unsubMsg = subscribeToUserReceivedMessages(targetListingIds, (receivedList) => {
       const unreadReceived = receivedList.filter((m) => m.isRead === false);
       setReceivedMessagesCount(unreadReceived.length);
@@ -161,7 +152,6 @@ export default function App() {
           knownMsgIdsRef.current.add(msg.id);
           setUnreadActivityCount((c) => c + 1);
 
-          // Resolve sender photo and listing context
           const senderAd = listings.find(
             (l) =>
               (msg.recipientListingId && l.id === msg.recipientListingId) ||
@@ -178,7 +168,7 @@ export default function App() {
               type: 'message',
               title: 'Nova Mensagem Recebida',
               senderName: msg.senderName,
-              senderPhoto: senderPhoto,
+              senderPhoto,
               preview: msg.message,
               timestamp: 'Agora mesmo',
               targetTab: 'messages'
@@ -189,7 +179,6 @@ export default function App() {
       });
     });
 
-    // 2. Subscribe to visitors who favorited the profile in real time
     const unsubFav = subscribeToWhoFavoritedMyListings(targetListingIds, (favoritedList) => {
       setWhoFavoritedCount(favoritedList.length);
       if (isInitialFavLoad.current) {
@@ -245,7 +234,6 @@ export default function App() {
     setLiveNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
-  // Sync browser History on Back/Forward buttons
   useEffect(() => {
     const handlePopState = () => {
       const nextView = parseUrlToView(
@@ -260,7 +248,6 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [listings]);
 
-  // Sync URL and SEO Metadata (Title, OpenGraph, Canonical, JSON-LD)
   useEffect(() => {
     const activeListing =
       currentView.type === 'detail'
@@ -269,7 +256,6 @@ export default function App() {
 
     updateDocumentSeo(currentView, activeListing);
 
-    // Ensure the current URL in address bar reflects the canonical view URL
     if (typeof window !== 'undefined') {
       const canonicalPath = buildViewUrl(currentView, listings);
       const currentFull = window.location.pathname + window.location.search;
@@ -279,16 +265,13 @@ export default function App() {
     }
   }, [currentView, listings]);
 
-  // Load live listings from Cloud Firestore & subscribe to real-time updates
   useEffect(() => {
-    // Initial fetch from Firestore
     getListingsFromFirestore().then((items) => {
       if (items && items.length > 0) {
         setListings(items);
       }
     });
 
-    // Real-time listener for updates across tabs and devices
     const unsubscribe = subscribeToListings((liveItems) => {
       if (liveItems && liveItems.length > 0) {
         setListings(liveItems);
@@ -300,7 +283,6 @@ export default function App() {
     };
   }, []);
 
-  // Debounced sync to localStorage to avoid freezing UI thread with heavy JSON operations
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
@@ -334,7 +316,6 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [user]);
 
-  // Synchronize user profile photo and location with their ad (unified account + profile rule)
   useEffect(() => {
     if (user.isLoggedIn && user.email) {
       const myAd = listings.find(
@@ -372,7 +353,6 @@ export default function App() {
     }
   }, [listings, user.isLoggedIn, user.email, user.avatarPhoto, user.city, user.myListingIds]);
 
-  // Navigation handler with history push
   const handleNavigate = (view: PageView, pushHistory = true) => {
     setCurrentView(view);
     if (view.type === 'my-account') {
@@ -385,7 +365,6 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
-  // Toggle favorite with Firestore recording
   const handleToggleFavorite = async (id: string) => {
     const isAdding = !favorites.includes(id);
     const nextFavorites = isAdding
@@ -393,15 +372,11 @@ export default function App() {
       : favorites.filter((item) => item !== id);
 
     setFavorites(nextFavorites);
-
-    // Save favorite status in Firestore
     await saveFavoriteToFirestore(id, isAdding, user.email || undefined, nextFavorites);
   };
 
-  // Publish / update single user profile listing
   const handlePublishAd = async (newAd: DatingListing) => {
     setListings((prev) => [newAd, ...prev.filter((i) => i.id !== newAd.id)]);
-    // Save to Firestore
     await saveListingToFirestore(newAd);
     setUser((prev) => {
       const updated: UserSession = {
@@ -415,7 +390,7 @@ export default function App() {
         age: newAd.age,
         bio: newAd.description,
         isLoggedIn: true,
-        myListingIds: [newAd.id] // Exactly 1 profile per user
+        myListingIds: [newAd.id]
       };
       if (updated.email) {
         saveUserProfileToFirestore(updated.email, updated);
@@ -424,7 +399,6 @@ export default function App() {
     });
   };
 
-  // Add comment with Firestore recording
   const handleAddComment = async (listingId: string, comment: CommentItem) => {
     const currentListing = listings.find((item) => item.id === listingId);
     const currentComments = currentListing ? currentListing.comments : [];
@@ -441,11 +415,9 @@ export default function App() {
       })
     );
 
-    // Persist comment directly into Firestore listing document
     await addCommentToFirestoreListing(listingId, comment, currentComments);
   };
 
-  // Login and User Registration handler
   const handleLogin = async (userData: Partial<UserSession>) => {
     let finalProfile: Partial<UserSession> = { ...userData };
     if (userData.email) {
@@ -464,7 +436,7 @@ export default function App() {
             isLoggedIn: true
           };
         }
-        // Check if there is an existing ad in listings collection
+
         const normEmail = userData.email.toLowerCase().trim();
         const matchingListing = listings.find(
           (l) => l.contact.email && l.contact.email.toLowerCase().trim() === normEmail
@@ -483,7 +455,6 @@ export default function App() {
           isLoggedIn: true
         });
 
-        // Restore user's saved favorites in current session if available
         if (finalProfile.savedFavorites && finalProfile.savedFavorites.length > 0) {
           setFavorites(finalProfile.savedFavorites);
         }
@@ -499,7 +470,6 @@ export default function App() {
     }));
   };
 
-  // Logout handler
   const handleLogout = () => {
     setUser({
       email: '',
@@ -512,7 +482,6 @@ export default function App() {
     handleNavigate({ type: 'home' });
   };
 
-  // Listing deleted handler from My Account
   const handleListingDeleted = (listingId: string) => {
     setListings((prev) => prev.filter((l) => l.id !== listingId));
     setUser((prev) => ({
@@ -521,7 +490,6 @@ export default function App() {
     }));
   };
 
-  // User profile updated handler
   const handleUpdateUser = (userData: Partial<UserSession>) => {
     setUser((prev) => ({
       ...prev,
@@ -529,9 +497,7 @@ export default function App() {
     }));
   };
 
-  // Directly add photo to user's profile and listing document
   const handleAddPhotoToProfile = async (photoBase64OrUrl: string) => {
-    // 1. Find user's profile listing
     const userAdIndex = listings.findIndex(
       (l) =>
         user.myListingIds.includes(l.id) ||
@@ -549,7 +515,6 @@ export default function App() {
       await saveListingToFirestore(updatedAd);
     }
 
-    // 2. Update user state and Firestore users collection
     const updatedUser: UserSession = {
       ...user,
       avatarPhoto: photoBase64OrUrl,
@@ -562,7 +527,6 @@ export default function App() {
     return updatedAd;
   };
 
-  // Get active listing if in detail view (memoized for instantaneous page switches)
   const currentDetailListing = useMemo(() =>
     currentView.type === 'detail'
       ? listings.find((l) => l.id === currentView.listingId)
@@ -584,7 +548,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans text-gray-800 antialiased selection:bg-[#0098d9] selection:text-white">
-      {/* Header */}
       <Header
         currentView={currentView}
         onNavigate={handleNavigate}
@@ -594,7 +557,6 @@ export default function App() {
         unreadActivityCount={unreadActivityCount}
       />
 
-      {/* Breadcrumbs Navigation Trail */}
       <Breadcrumbs
         view={currentView}
         onNavigate={handleNavigate}
@@ -610,7 +572,6 @@ export default function App() {
         }
       />
 
-      {/* Main Body Pages */}
       <main className="flex-1 pb-20 md:pb-0">
         {currentView.type === 'home' && (
           <HomeView
@@ -760,7 +721,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Global Contact Modal */}
       {contactingListing && (
         <ContactModal
           listing={contactingListing}
@@ -776,17 +736,14 @@ export default function App() {
         />
       )}
 
-      {/* Real-time Notification Floating Toast for Desktop & Mobile */}
       <RealtimeNotificationToast
         notifications={liveNotifications}
         onDismiss={handleDismissNotification}
         onNavigate={handleNavigate}
       />
 
-      {/* Footer */}
       <Footer onNavigate={handleNavigate} />
 
-      {/* Mobile Fixed Bottom Navigation Bar */}
       <MobileBottomNav
         currentView={currentView}
         onNavigate={handleNavigate}
