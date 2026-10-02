@@ -1,0 +1,8 @@
+{
+  "name": "AmorClass - Classificados de Namoro",
+  "description": "Portal de classificados voltado a namoro e relacionamentos com a estética clássica e veloz de classificados em React.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

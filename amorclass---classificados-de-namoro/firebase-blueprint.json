@@ -1,0 +1,78 @@
+{
+  "entities": {
+    "Listing": {
+      "title": "Listing",
+      "description": "Anúncio de perfil de namoro / classificado",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "categoryLabel": { "type": "string" },
+        "age": { "type": "number" },
+        "gender": { "type": "string" },
+        "seeking": { "type": "string" },
+        "publishedDate": { "type": "string" },
+        "featured": { "type": "boolean" },
+        "views": { "type": "number" }
+      },
+      "required": ["id", "title", "description", "category", "age", "gender", "seeking"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Perfil de usuário cadastrado",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" }
+      },
+      "required": ["email", "name"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Mensagem privada enviada ao anunciante",
+      "type": "object",
+      "properties": {
+        "senderName": { "type": "string" },
+        "senderEmail": { "type": "string" },
+        "senderPhone": { "type": "string" },
+        "recipientListingId": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["senderName", "senderEmail", "recipientListingId", "message"]
+    },
+    "Favorite": {
+      "title": "Favorite",
+      "description": "Registro de anúncio favoritado por usuário ou visitante",
+      "type": "object",
+      "properties": {
+        "listingId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "active": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["listingId", "active"]
+    }
+  },
+  "firestore": {
+    "/listings/{listingId}": {
+      "schema": { "$ref": "#/entities/Listing" },
+      "description": "Coleção de anúncios de classificados de namoro"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Perfis de usuários cadastrados no sistema"
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Mensagens de contato entre usuários"
+    },
+    "/favorites/{favoriteId}": {
+      "schema": { "$ref": "#/entities/Favorite" },
+      "description": "Registro de anúncios favoritados"
+    }
+  }
+}
